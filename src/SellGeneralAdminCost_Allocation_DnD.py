@@ -228,6 +228,14 @@ def is_manhour_csv_file(pszBaseName: str) -> bool:
     return re.fullmatch(r"工数\d{2}\.\d{1,2}\.csv", pszNormalized) is not None
 
 
+def is_step10_tsv_file(pszBaseName: str) -> bool:
+    return pszBaseName.startswith("工数_") and pszBaseName.endswith("_step10_各プロジェクトの工数.tsv")
+
+
+def is_pl_tsv_file(pszBaseName: str) -> bool:
+    return pszBaseName.startswith("損益計算書_") and pszBaseName.endswith("_A∪B_プロジェクト名_C∪D_vertical.tsv")
+
+
 def is_consecutive_months(objYearMonths: List[Tuple[int, int]]) -> bool:
     if not objYearMonths:
         return False
@@ -485,6 +493,71 @@ def run_manhour_csv_to_sheet(
     return 0
 
 
+def run_step10_tsv_only(
+    objStep10Files: List[str],
+) -> int:
+    pszScriptPath: str = os.path.join(
+        os.path.dirname(__file__),
+        "make_manhour_to_sheet8_01_0001.py",
+    )
+    if not os.path.exists(pszScriptPath):
+        pszErrorMessage: str = (
+            "Error: make_manhour_to_sheet8_01_0001.py not found. Path = "
+            + pszScriptPath
+        )
+        append_error_log(pszErrorMessage)
+        show_error_message_box(pszErrorMessage, "SellGeneralAdminCost_Allocation_DnD")
+        return 1
+
+    iExitCode: int = 0
+    for pszStep10Path in objStep10Files:
+        objCommand: List[str] = [sys.executable, pszScriptPath, pszStep10Path]
+        try:
+            objResult = subprocess.run(
+                objCommand,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            pszErrorMessage: str = (
+                "Error: unexpected exception while running make_manhour_to_sheet8_01_0001.py. Detail = "
+                + str(exc)
+            )
+            append_error_log(pszErrorMessage)
+            show_error_message_box(pszErrorMessage, "SellGeneralAdminCost_Allocation_DnD")
+            iExitCode = 1
+            continue
+
+        if objResult.returncode != 0:
+            pszStdErr: str = objResult.stderr
+            if pszStdErr.strip() == "":
+                pszStdErr = "Process exited with non-zero return code and no stderr output."
+            pszErrorMessage = (
+                "Error: make_manhour_to_sheet8_01_0001.py exited with non-zero return code.\n\n"
+                + "Return code = "
+                + str(objResult.returncode)
+                + "\n\n"
+                + "stderr:\n"
+                + pszStdErr
+            )
+            append_error_log(pszErrorMessage)
+            show_error_message_box(pszErrorMessage, "SellGeneralAdminCost_Allocation_DnD")
+            iExitCode = 1
+            continue
+
+        pszStdOut: str = objResult.stdout.strip()
+        if pszStdOut != "":
+            print(pszStdOut)
+            move_output_files_to_temp(pszStdOut)
+        move_manhour_outputs_to_temp(pszStep10Path)
+
+    if iExitCode == 0:
+        pszMessage: str = "Step10 TSV only flow finished successfully."
+        show_message_box(pszMessage, "SellGeneralAdminCost_Allocation_DnD")
+    return iExitCode
+
+
 def draw_instruction_text(
     iWindowHandle: int,
 ) -> None:
@@ -555,6 +628,9 @@ def window_proc(
 
         objCsvFiles: List[str] = []
         objManhourCsvFiles: List[str] = []
+        objStep10TsvFiles: List[str] = []
+        objPlTsvFiles: List[str] = []
+        objUnexpectedFiles: List[str] = []
         bAllCsv: bool = True
         bAllManhourCsv: bool = True
         for pszFilePath in objFiles:
@@ -567,12 +643,43 @@ def window_proc(
                 objManhourCsvFiles.append(pszFilePath)
             else:
                 bAllManhourCsv = False
+            if is_step10_tsv_file(pszBaseName):
+                objStep10TsvFiles.append(pszFilePath)
+            elif is_pl_tsv_file(pszBaseName):
+                objPlTsvFiles.append(pszFilePath)
+            elif not (is_pl_csv_file(pszBaseName) or is_manhour_csv_file(pszBaseName)):
+                objUnexpectedFiles.append(pszFilePath)
 
-        if bAllCsv and objCsvFiles:
+        if objUnexpectedFiles:
+            pszErrorMessage = "Error: unexpected or mixed file types detected.\n"
+            pszErrorMessage += "\n".join(objUnexpectedFiles)
+            show_error_message_box(pszErrorMessage, "SellGeneralAdminCost_Allocation_DnD")
+            return 0
+
+        if bAllCsv and objCsvFiles and not (objStep10TsvFiles or objPlTsvFiles):
             run_pl_csv_to_tsv(objCsvFiles)
             return 0
-        if bAllManhourCsv and objManhourCsvFiles:
+        if bAllManhourCsv and objManhourCsvFiles and not (objStep10TsvFiles or objPlTsvFiles):
             run_manhour_csv_to_sheet(objManhourCsvFiles)
+            return 0
+
+        if objStep10TsvFiles and not (objPlTsvFiles or objCsvFiles or objManhourCsvFiles):
+            run_step10_tsv_only(objStep10TsvFiles)
+            return 0
+
+        if objStep10TsvFiles and objPlTsvFiles and not (objCsvFiles or objManhourCsvFiles):
+            objPairs = collect_valid_pairs(objStep10TsvFiles + objPlTsvFiles)
+            objPairs = select_consecutive_pairs(objPairs)
+            if not objPairs:
+                pszErrorMessage = (
+                    "Error: dropped Step10 TSV and PL TSV files are invalid or not consecutive by year/month."
+                )
+                show_error_message_box(
+                    pszErrorMessage,
+                    "SellGeneralAdminCost_Allocation_DnD",
+                )
+                return 0
+            run_allocation_with_pairs(objPairs)
             return 0
 
         objPairs = collect_valid_pairs(objFiles)
