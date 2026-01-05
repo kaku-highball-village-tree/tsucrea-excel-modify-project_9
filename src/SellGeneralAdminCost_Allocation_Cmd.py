@@ -53,12 +53,12 @@ def build_default_output_path(pszInputPlPath: str) -> str:
 
     pszTargetMarker: str = "損益計算書_"
     pszSuffix: str = "販管費配賦_"
-    pszStepMarker: str = "販管費配賦_step0006_"
+    pszStepMarker: str = "販管費配賦_step0010_"
     pszStepMarkerOld: str = "販管費配賦_step0001_"
     pszStepMarkerPrevious: str = "販管費配賦_step0002_"
-    pszStepMarkerCurrent: str = "販管費配賦_step0003_"
-    pszStepMarkerNext: str = "販管費配賦_step0004_"
-    pszStepMarkerAfterNext: str = "販管費配賦_step0005_"
+    pszStepMarkerCurrent: str = "販管費配賦_step0007_"
+    pszStepMarkerNext: str = "販管費配賦_step0008_"
+    pszStepMarkerAfterNext: str = "販管費配賦_step0009_"
 
     if pszStepMarkerOld in pszStem:
         pszOutputStem = pszStem.replace(pszStepMarkerOld, pszStepMarker, 1)
@@ -97,9 +97,9 @@ def build_output_path_with_step(pszInputPlPath: str, pszStepMarker: str) -> str:
     pszSuffix: str = "販管費配賦_"
     pszStepMarkerOld: str = "販管費配賦_step0001_"
     pszStepMarkerCurrent: str = "販管費配賦_step0002_"
-    pszStepMarkerNext: str = "販管費配賦_step0003_"
-    pszStepMarkerAfterNext: str = "販管費配賦_step0004_"
-    pszStepMarkerAfterAfterNext: str = "販管費配賦_step0005_"
+    pszStepMarkerNext: str = "販管費配賦_step0007_"
+    pszStepMarkerAfterNext: str = "販管費配賦_step0008_"
+    pszStepMarkerAfterAfterNext: str = "販管費配賦_step0009_"
 
     if pszStepMarkerOld in pszStem:
         pszOutputStem: str = pszStem.replace(pszStepMarkerOld, pszStepMarker, 1)
@@ -1341,17 +1341,17 @@ def create_pj_summary(
     )
     pszSingleStep0003Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0003_単月_損益計算書.tsv",
+        "0001_PJサマリ_step0007_単月_損益計算書.tsv",
     )
     pszCumulativeStep0003Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0003_累計_損益計算書.tsv",
+        "0001_PJサマリ_step0007_累計_損益計算書.tsv",
     )
     write_tsv_rows(pszSingleStep0003Path, objSingleStep0003Rows)
     write_tsv_rows(pszCumulativeStep0003Path, objCumulativeStep0003Rows)
 
     if len(objSingleStep0003Rows) != len(objCumulativeStep0003Rows):
-        print("Error: step0003 row count mismatch between single and cumulative.")
+        print("Error: step0007 row count mismatch between single and cumulative.")
         return
 
     for iRowIndex, objRow in enumerate(objSingleStep0003Rows):
@@ -1360,7 +1360,7 @@ def create_pj_summary(
         pszCumulativeKey: str = objCumulativeRow[0] if objCumulativeRow else ""
         if pszSingleKey != pszCumulativeKey:
             print(
-                "Error: step0003 first-column mismatch at row "
+                "Error: step0007 first-column mismatch at row "
                 + str(iRowIndex)
                 + ". single="
                 + pszSingleKey
@@ -1396,7 +1396,7 @@ def create_pj_summary(
 
     pszStep0004Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0004_単月・累計_損益計算書.tsv",
+        "0001_PJサマリ_step0008_単月・累計_損益計算書.tsv",
     )
     write_tsv_rows(pszStep0004Path, objStep0004Rows)
 
@@ -1416,7 +1416,7 @@ def create_pj_summary(
 
     pszStep0005Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0005_単月・累計_損益計算書.tsv",
+        "0001_PJサマリ_step0009_単月・累計_損益計算書.tsv",
     )
     write_tsv_rows(pszStep0005Path, objStep0005Rows)
 
@@ -1497,7 +1497,7 @@ def create_pj_summary(
 
         pszGrossProfitCombinedPath: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0003_単月・累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0007_単月・累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitCombinedPath, objGrossProfitCombinedRows)
 
@@ -1533,7 +1533,7 @@ def create_pj_summary(
             )
         pszGrossProfitSingleRankPath: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0003_単月_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0007_単月_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitSingleRankPath, objGrossProfitSingleRankRows)
 
@@ -1569,13 +1569,13 @@ def create_pj_summary(
             )
         pszGrossProfitCumulativeRankPath: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0003_累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0007_累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitCumulativeRankPath, objGrossProfitCumulativeRankRows)
 
     if objGrossProfitSingleRankRows and objGrossProfitCumulativeRankRows:
         if len(objGrossProfitSingleRankRows) != len(objGrossProfitCumulativeRankRows):
-            print("Error: gross profit ranking step0004 row count mismatch.")
+            print("Error: gross profit ranking step0008 row count mismatch.")
             return
 
         objGrossProfitStep0004Rows: List[List[str]] = []
@@ -1588,7 +1588,7 @@ def create_pj_summary(
 
         pszGrossProfitStep0004Path: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0004_単月・累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0008_単月・累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitStep0004Path, objGrossProfitStep0004Rows)
 
@@ -1610,7 +1610,7 @@ def create_pj_summary(
         objGrossProfitStep0005Rows.extend(objGrossProfitStep0004Rows)
         pszGrossProfitStep0005Path: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0005_単月・累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0009_単月・累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitStep0005Path, objGrossProfitStep0005Rows)
 
@@ -1642,7 +1642,7 @@ def create_pj_summary(
 
             pszGrossProfitStep0006Path: str = os.path.join(
                 pszDirectory,
-                "0002_PJサマリ_step0006_単月・累計_粗利金額ランキング.tsv",
+                "0002_PJサマリ_step0010_単月・累計_粗利金額ランキング.tsv",
             )
             write_tsv_rows(pszGrossProfitStep0006Path, objGrossProfitStep0006Rows)
 
@@ -1814,10 +1814,10 @@ def main(argv: list[str]) -> int:
         pszOutputFinalPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_")
         pszOutputStep0001Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0001_")
         pszOutputStep0002Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0002_")
-        pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
-        pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0004_")
-        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0005_")
-        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0006_")
+        pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0007_")
+        pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0008_")
+        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
+        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0010_")
 
         if not os.path.exists(pszManhourPath):
             print(f"Input file not found: {pszManhourPath}")
