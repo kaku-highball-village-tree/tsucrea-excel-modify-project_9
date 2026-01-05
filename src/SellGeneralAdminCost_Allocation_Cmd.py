@@ -53,12 +53,12 @@ def build_default_output_path(pszInputPlPath: str) -> str:
 
     pszTargetMarker: str = "損益計算書_"
     pszSuffix: str = "販管費配賦_"
-    pszStepMarker: str = "販管費配賦_step0006_"
+    pszStepMarker: str = "販管費配賦_step0010_"
     pszStepMarkerOld: str = "販管費配賦_step0001_"
     pszStepMarkerPrevious: str = "販管費配賦_step0002_"
-    pszStepMarkerCurrent: str = "販管費配賦_step0003_"
-    pszStepMarkerNext: str = "販管費配賦_step0004_"
-    pszStepMarkerAfterNext: str = "販管費配賦_step0005_"
+    pszStepMarkerCurrent: str = "販管費配賦_step0007_"
+    pszStepMarkerNext: str = "販管費配賦_step0008_"
+    pszStepMarkerAfterNext: str = "販管費配賦_step0009_"
 
     if pszStepMarkerOld in pszStem:
         pszOutputStem = pszStem.replace(pszStepMarkerOld, pszStepMarker, 1)
@@ -97,9 +97,9 @@ def build_output_path_with_step(pszInputPlPath: str, pszStepMarker: str) -> str:
     pszSuffix: str = "販管費配賦_"
     pszStepMarkerOld: str = "販管費配賦_step0001_"
     pszStepMarkerCurrent: str = "販管費配賦_step0002_"
-    pszStepMarkerNext: str = "販管費配賦_step0003_"
-    pszStepMarkerAfterNext: str = "販管費配賦_step0004_"
-    pszStepMarkerAfterAfterNext: str = "販管費配賦_step0005_"
+    pszStepMarkerNext: str = "販管費配賦_step0007_"
+    pszStepMarkerAfterNext: str = "販管費配賦_step0008_"
+    pszStepMarkerAfterAfterNext: str = "販管費配賦_step0009_"
 
     if pszStepMarkerOld in pszStem:
         pszOutputStem: str = pszStem.replace(pszStepMarkerOld, pszStepMarker, 1)
@@ -142,32 +142,45 @@ def extract_project_key(pszProjectName: str) -> Optional[str]:
     return None
 
 
-def load_manhour_map(pszManhourPath: str) -> Dict[str, str]:
-    objManhourMap: Dict[str, str] = {}
+def load_manhour_map(pszManhourPath: str) -> Dict[str, List[str]]:
+    objManhourMap: Dict[str, List[str]] = {}
     with open(pszManhourPath, "r", encoding="utf-8", newline="") as objInputFile:
         for pszLine in objInputFile:
             pszLineText: str = pszLine.rstrip("\n").rstrip("\r")
             if pszLineText == "":
                 continue
 
-            pszFirstColumn: str
-            if "\t" in pszLineText:
-                pszFirstColumn = pszLineText.split("\t", 1)[0]
-            else:
-                pszFirstColumn = pszLineText
+            objParts: List[str] = pszLineText.split("\t")
+            pszFirstColumn: str = objParts[0] if objParts else ""
 
             pszKey: Optional[str] = extract_project_key(pszFirstColumn)
             if pszKey is None:
                 continue
 
-            pszTimeValue: str = ""
-            if "\t" in pszLineText:
-                objParts: List[str] = pszLineText.split("\t")
-                if len(objParts) >= 2:
-                    pszTimeValue = objParts[1]
-            objManhourMap[pszKey] = pszTimeValue
+            objManhourValues: List[str] = objParts[-6:] if len(objParts) >= 7 else []
+            if len(objManhourValues) < 6:
+                objManhourValues.extend([""] * (6 - len(objManhourValues)))
+            objManhourMap[pszKey] = objManhourValues
 
     return objManhourMap
+
+
+def load_company_map(pszManhourPath: str) -> Dict[str, str]:
+    objCompanyMap: Dict[str, str] = {}
+    with open(pszManhourPath, "r", encoding="utf-8", newline="") as objInputFile:
+        for pszLine in objInputFile:
+            pszLineText: str = pszLine.rstrip("\n").rstrip("\r")
+            if pszLineText == "":
+                continue
+            objParts: List[str] = pszLineText.split("\t")
+            if not objParts:
+                continue
+            pszKey: Optional[str] = extract_project_key(objParts[0])
+            if pszKey is None:
+                continue
+            pszCompany: str = objParts[1] if len(objParts) >= 2 else ""
+            objCompanyMap[pszKey] = pszCompany
+    return objCompanyMap
 
 
 def parse_number(pszText: str) -> float:
@@ -428,12 +441,14 @@ def process_pl_tsv(
     pszOutputPath: str,
     pszOutputStep0001Path: str,
     pszOutputStep0002Path: str,
+    pszOutputStep0003ZeroPath: str,
     pszOutputStep0003Path: str,
     pszOutputStep0004Path: str,
     pszOutputStep0005Path: str,
     pszOutputStep0006Path: str,
     pszOutputFinalPath: str,
-    objManhourMap: Dict[str, str],
+    objManhourMap: Dict[str, List[str]],
+    objCompanyMap: Dict[str, str],
 ) -> None:
     objRows: List[List[str]] = []
     with open(pszPlPath, "r", encoding="utf-8", newline="") as objInputFile:
@@ -446,7 +461,16 @@ def process_pl_tsv(
         if iRowIndex == 0:
             if len(objRow) == 0:
                 objRow = [""]
-            objRow.append("工数")
+            objRow.extend(
+                [
+                    "工数",
+                    "1Cカンパニー販管費の工数",
+                    "2Cカンパニー販管費の工数",
+                    "3Cカンパニー販管費の工数",
+                    "4Cカンパニー販管費の工数",
+                    "事業開発カンパニー販管費の工数",
+                ]
+            )
             objRows[iRowIndex] = objRow
             continue
 
@@ -454,11 +478,11 @@ def process_pl_tsv(
         if pszKey is None:
             continue
 
-        pszManhour: str = objManhourMap.get(pszKey, "")
-        if pszManhour == "":
-            pszManhour = "0:00:00"
+        objManhours: List[str] = objManhourMap.get(pszKey, [])
+        if len(objManhours) < 6:
+            objManhours = objManhours + ["0:00:00"] * (6 - len(objManhours))
 
-        objRow.append(pszManhour)
+        objRow.extend(objManhours[:6])
         objRows[iRowIndex] = objRow
 
     with open(pszOutputStep0001Path, "w", encoding="utf-8", newline="") as objOutputFile:
@@ -489,6 +513,98 @@ def process_pl_tsv(
     with open(pszOutputStep0002Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
+
+    # step0004の処理
+    # ここから
+    objZeroRows: List[List[str]] = [list(objRow) for objRow in objRows]
+    if objZeroRows:
+        objHeaderZero: List[str] = objZeroRows[0]
+        objTargetColumns: List[str] = [
+            "1Cカンパニー販管費の工数",
+            "2Cカンパニー販管費の工数",
+            "3Cカンパニー販管費の工数",
+            "4Cカンパニー販管費の工数",
+            "事業開発カンパニー販管費の工数",
+        ]
+        objTargetIndices: List[int] = [
+            find_column_index(objHeaderZero, pszColumn) for pszColumn in objTargetColumns
+        ]
+        for iRowIndex, objRow in enumerate(objZeroRows):
+            if iRowIndex < 3:
+                continue
+            for iColumnIndex in objTargetIndices:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+            objZeroRows[iRowIndex] = objRow
+
+    with open(pszOutputStep0003ZeroPath, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objZeroRows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    pszOutputStep0004Path: str = pszOutputStep0003ZeroPath.replace("step0003_", "step0004_", 1)
+    iManhourColumnIndexZero: int = find_column_index(objZeroRows[0], "工数") if objZeroRows else -1
+    objTargetColumnsZero: List[str] = [
+        "1Cカンパニー販管費の工数",
+        "2Cカンパニー販管費の工数",
+        "3Cカンパニー販管費の工数",
+        "4Cカンパニー販管費の工数",
+        "事業開発カンパニー販管費の工数",
+    ]
+    objTargetIndicesZero: List[int] = [
+        find_column_index(objZeroRows[0], pszColumn) if objZeroRows else -1 for pszColumn in objTargetColumnsZero
+    ]
+    bSeenHeadquarter: bool = False
+    for iRowIndex, objRow in enumerate(objZeroRows):
+        if not objRow:
+            continue
+        pszName: str = objRow[0]
+        if pszName == "本部":
+            bSeenHeadquarter = True
+            continue
+        if not bSeenHeadquarter:
+            continue
+        if pszName.startswith("C"):
+            for iColumnIndex in objTargetIndicesZero:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+            objZeroRows[iRowIndex] = objRow
+            continue
+        pszKey: Optional[str] = extract_project_key(pszName)
+        if pszKey is None:
+            continue
+        pszCompany: str = objCompanyMap.get(pszKey, "")
+        iTargetColumn: int = -1
+        if pszCompany == "第一インキュ":
+            iTargetColumn = objTargetIndicesZero[0] if len(objTargetIndicesZero) > 0 else -1
+        elif pszCompany == "第二インキュ":
+            iTargetColumn = objTargetIndicesZero[1] if len(objTargetIndicesZero) > 1 else -1
+        elif pszCompany == "第三インキュ":
+            iTargetColumn = objTargetIndicesZero[2] if len(objTargetIndicesZero) > 2 else -1
+        elif pszCompany == "第四インキュ":
+            iTargetColumn = objTargetIndicesZero[3] if len(objTargetIndicesZero) > 3 else -1
+        elif pszCompany == "事業開発":
+            iTargetColumn = objTargetIndicesZero[4] if len(objTargetIndicesZero) > 4 else -1
+        if iTargetColumn >= 0:
+            if len(objRow) <= iTargetColumn:
+                objRow.extend([""] * (iTargetColumn + 1 - len(objRow)))
+            pszManhourValue: str = "0:00:00"
+            if iManhourColumnIndexZero >= 0 and iManhourColumnIndexZero < len(objRow):
+                pszManhourValue = objRow[iManhourColumnIndexZero] or "0:00:00"
+            for iColumnIndex in objTargetIndicesZero:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+            objRow[iTargetColumn] = pszManhourValue
+        else:
+            for iColumnIndex in objTargetIndicesZero:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+        objZeroRows[iRowIndex] = objRow
+
+    with open(pszOutputStep0004Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objZeroRows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+    # step0004の処理
+    # ここまで
 
     iGrossProfitColumnIndex: int = -1
     iOperatingProfitColumnIndex: int = -1
@@ -1337,17 +1453,17 @@ def create_pj_summary(
     )
     pszSingleStep0003Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0003_単月_損益計算書.tsv",
+        "0001_PJサマリ_step0007_単月_損益計算書.tsv",
     )
     pszCumulativeStep0003Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0003_累計_損益計算書.tsv",
+        "0001_PJサマリ_step0007_累計_損益計算書.tsv",
     )
     write_tsv_rows(pszSingleStep0003Path, objSingleStep0003Rows)
     write_tsv_rows(pszCumulativeStep0003Path, objCumulativeStep0003Rows)
 
     if len(objSingleStep0003Rows) != len(objCumulativeStep0003Rows):
-        print("Error: step0003 row count mismatch between single and cumulative.")
+        print("Error: step0007 row count mismatch between single and cumulative.")
         return
 
     for iRowIndex, objRow in enumerate(objSingleStep0003Rows):
@@ -1356,7 +1472,7 @@ def create_pj_summary(
         pszCumulativeKey: str = objCumulativeRow[0] if objCumulativeRow else ""
         if pszSingleKey != pszCumulativeKey:
             print(
-                "Error: step0003 first-column mismatch at row "
+                "Error: step0007 first-column mismatch at row "
                 + str(iRowIndex)
                 + ". single="
                 + pszSingleKey
@@ -1392,7 +1508,7 @@ def create_pj_summary(
 
     pszStep0004Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0004_単月・累計_損益計算書.tsv",
+        "0001_PJサマリ_step0008_単月・累計_損益計算書.tsv",
     )
     write_tsv_rows(pszStep0004Path, objStep0004Rows)
 
@@ -1412,7 +1528,7 @@ def create_pj_summary(
 
     pszStep0005Path: str = os.path.join(
         pszDirectory,
-        "0001_PJサマリ_step0005_単月・累計_損益計算書.tsv",
+        "0001_PJサマリ_step0009_単月・累計_損益計算書.tsv",
     )
     write_tsv_rows(pszStep0005Path, objStep0005Rows)
 
@@ -1493,7 +1609,7 @@ def create_pj_summary(
 
         pszGrossProfitCombinedPath: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0003_単月・累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0007_単月・累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitCombinedPath, objGrossProfitCombinedRows)
 
@@ -1529,7 +1645,7 @@ def create_pj_summary(
             )
         pszGrossProfitSingleRankPath: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0003_単月_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0007_単月_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitSingleRankPath, objGrossProfitSingleRankRows)
 
@@ -1565,13 +1681,13 @@ def create_pj_summary(
             )
         pszGrossProfitCumulativeRankPath: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0003_累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0007_累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitCumulativeRankPath, objGrossProfitCumulativeRankRows)
 
     if objGrossProfitSingleRankRows and objGrossProfitCumulativeRankRows:
         if len(objGrossProfitSingleRankRows) != len(objGrossProfitCumulativeRankRows):
-            print("Error: gross profit ranking step0004 row count mismatch.")
+            print("Error: gross profit ranking step0008 row count mismatch.")
             return
 
         objGrossProfitStep0004Rows: List[List[str]] = []
@@ -1584,7 +1700,7 @@ def create_pj_summary(
 
         pszGrossProfitStep0004Path: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0004_単月・累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0008_単月・累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitStep0004Path, objGrossProfitStep0004Rows)
 
@@ -1606,7 +1722,7 @@ def create_pj_summary(
         objGrossProfitStep0005Rows.extend(objGrossProfitStep0004Rows)
         pszGrossProfitStep0005Path: str = os.path.join(
             pszDirectory,
-            "0002_PJサマリ_step0005_単月・累計_粗利金額ランキング.tsv",
+            "0002_PJサマリ_step0009_単月・累計_粗利金額ランキング.tsv",
         )
         write_tsv_rows(pszGrossProfitStep0005Path, objGrossProfitStep0005Rows)
 
@@ -1638,7 +1754,7 @@ def create_pj_summary(
 
             pszGrossProfitStep0006Path: str = os.path.join(
                 pszDirectory,
-                "0002_PJサマリ_step0006_単月・累計_粗利金額ランキング.tsv",
+                "0002_PJサマリ_step0010_単月・累計_粗利金額ランキング.tsv",
             )
             write_tsv_rows(pszGrossProfitStep0006Path, objGrossProfitStep0006Rows)
 
@@ -1810,10 +1926,11 @@ def main(argv: list[str]) -> int:
         pszOutputFinalPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_")
         pszOutputStep0001Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0001_")
         pszOutputStep0002Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0002_")
-        pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
-        pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0004_")
-        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0005_")
-        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0006_")
+        pszOutputStep0003ZeroPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
+        pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0007_")
+        pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0008_")
+        pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
+        pszOutputStep0006Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0010_")
 
         if not os.path.exists(pszManhourPath):
             print(f"Input file not found: {pszManhourPath}")
@@ -1823,21 +1940,25 @@ def main(argv: list[str]) -> int:
             return 1
 
         objManhourMap: Dict[str, str] = load_manhour_map(pszManhourPath)
+        objCompanyMap: Dict[str, str] = load_company_map(pszManhourPath)
         process_pl_tsv(
             pszPlPath,
             pszOutputPath,
             pszOutputStep0001Path,
             pszOutputStep0002Path,
+            pszOutputStep0003ZeroPath,
             pszOutputStep0003Path,
             pszOutputStep0004Path,
             pszOutputStep0005Path,
             pszOutputStep0006Path,
             pszOutputFinalPath,
             objManhourMap,
+            objCompanyMap,
         )
 
         print(f"Output: {pszOutputStep0001Path}")
         print(f"Output: {pszOutputStep0002Path}")
+        print(f"Output: {pszOutputStep0003ZeroPath}")
         print(f"Output: {pszOutputStep0003Path}")
         print(f"Output: {pszOutputStep0004Path}")
         print(f"Output: {pszOutputStep0005Path}")
