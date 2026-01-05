@@ -192,6 +192,36 @@ def move_manhour_outputs_to_temp(pszCsvPath: str) -> None:
             shutil.copy2(pszTargetPath, pszCopyPath)
 
 
+def build_pl_tsv_base_name(iYear: int, iMonth: int) -> str:
+    pszMonth: str = f"{iMonth:02d}"
+    return f"損益計算書_{iYear}年{pszMonth}月_A∪B_プロジェクト名_C∪D_vertical.tsv"
+
+
+def find_pl_tsv_paths_for_year_months(objYearMonthTexts: List[str]) -> List[str]:
+    if not objYearMonthTexts:
+        return []
+    pszBaseDirectory: str = os.path.dirname(__file__)
+    pszTempDirectory: str = get_temp_output_directory()
+    objFound: List[str] = []
+    objSeen: set[str] = set()
+    objDirectories: List[str] = [pszBaseDirectory, pszTempDirectory]
+    for pszYearMonthText in objYearMonthTexts:
+        objValue = parse_year_month_value(pszYearMonthText)
+        if objValue is None:
+            continue
+        iYear, iMonth = objValue
+        pszBaseName: str = build_pl_tsv_base_name(iYear, iMonth)
+        for pszDirectory in objDirectories:
+            pszCandidate: str = os.path.join(pszDirectory, pszBaseName)
+            if not os.path.isfile(pszCandidate):
+                continue
+            if pszCandidate in objSeen:
+                continue
+            objFound.append(pszCandidate)
+            objSeen.add(pszCandidate)
+    return objFound
+
+
 def parse_year_month_from_name(pszBaseName: str) -> Optional[str]:
     iPrefixIndex: int = pszBaseName.find("_")
     if iPrefixIndex < 0:
@@ -230,6 +260,10 @@ def is_manhour_csv_file(pszBaseName: str) -> bool:
 
 def is_step10_tsv_file(pszBaseName: str) -> bool:
     return pszBaseName.startswith("工数_") and pszBaseName.endswith("_step10_各プロジェクトの工数.tsv")
+
+
+def is_step11_tsv_file(pszBaseName: str) -> bool:
+    return pszBaseName.startswith("工数_") and pszBaseName.endswith("_step11_各プロジェクトの計上カンパニー名_工数_カンパニーの工数.tsv")
 
 
 def is_pl_tsv_file(pszBaseName: str) -> bool:
@@ -629,6 +663,7 @@ def window_proc(
         objCsvFiles: List[str] = []
         objManhourCsvFiles: List[str] = []
         objStep10TsvFiles: List[str] = []
+        objStep11TsvFiles: List[str] = []
         objPlTsvFiles: List[str] = []
         objUnexpectedFiles: List[str] = []
         bAllCsv: bool = True
@@ -645,6 +680,8 @@ def window_proc(
                 bAllManhourCsv = False
             if is_step10_tsv_file(pszBaseName):
                 objStep10TsvFiles.append(pszFilePath)
+            elif is_step11_tsv_file(pszBaseName):
+                objStep11TsvFiles.append(pszFilePath)
             elif is_pl_tsv_file(pszBaseName):
                 objPlTsvFiles.append(pszFilePath)
             elif not (is_pl_csv_file(pszBaseName) or is_manhour_csv_file(pszBaseName)):
@@ -656,6 +693,8 @@ def window_proc(
             show_error_message_box(pszErrorMessage, "SellGeneralAdminCost_Allocation_DnD")
             return 0
 
+        objManhourTsvFiles: List[str] = objStep10TsvFiles + objStep11TsvFiles
+
         if bAllCsv and objCsvFiles and not (objStep10TsvFiles or objPlTsvFiles):
             run_pl_csv_to_tsv(objCsvFiles)
             return 0
@@ -663,16 +702,51 @@ def window_proc(
             run_manhour_csv_to_sheet(objManhourCsvFiles)
             return 0
 
-        if objStep10TsvFiles and not (objPlTsvFiles or objCsvFiles or objManhourCsvFiles):
-            run_step10_tsv_only(objStep10TsvFiles)
+        if objManhourTsvFiles and not (objPlTsvFiles or objCsvFiles or objManhourCsvFiles):
+            run_step10_tsv_only(objManhourTsvFiles)
             return 0
 
-        if objStep10TsvFiles and objPlTsvFiles and not (objCsvFiles or objManhourCsvFiles):
-            objPairs = collect_valid_pairs(objStep10TsvFiles + objPlTsvFiles)
+        if objManhourTsvFiles and objPlTsvFiles and not (objCsvFiles or objManhourCsvFiles):
+            objPairs = collect_valid_pairs(objManhourTsvFiles + objPlTsvFiles)
             objPairs = select_consecutive_pairs(objPairs)
             if not objPairs:
                 pszErrorMessage = (
                     "Error: dropped Step10 TSV and PL TSV files are invalid or not consecutive by year/month."
+                )
+                show_error_message_box(
+                    pszErrorMessage,
+                    "SellGeneralAdminCost_Allocation_DnD",
+                )
+                return 0
+            run_allocation_with_pairs(objPairs)
+            return 0
+
+        if objManhourTsvFiles and objCsvFiles and not objPlTsvFiles and not objManhourCsvFiles:
+            iPlExitCode: int = run_pl_csv_to_tsv(objCsvFiles)
+            if iPlExitCode != 0:
+                return 0
+            objYearMonthsText: List[str] = []
+            for pszManhourPath in objManhourTsvFiles:
+                pszBaseName = os.path.basename(pszManhourPath)
+                pszYearMonth = parse_year_month_from_name(pszBaseName)
+                if pszYearMonth is None:
+                    continue
+                objYearMonthsText.append(pszYearMonth)
+            objPlCandidates: List[str] = find_pl_tsv_paths_for_year_months(objYearMonthsText)
+            if not objPlCandidates:
+                pszErrorMessage = (
+                    "Error: PL TSV files generated from CSV were not found for the dropped manhour files."
+                )
+                show_error_message_box(
+                    pszErrorMessage,
+                    "SellGeneralAdminCost_Allocation_DnD",
+                )
+                return 0
+            objPairs = collect_valid_pairs(objManhourTsvFiles + objPlCandidates)
+            objPairs = select_consecutive_pairs(objPairs)
+            if not objPairs:
+                pszErrorMessage = (
+                    "Error: dropped manhour TSV and generated PL TSV files are invalid or not consecutive by year/month."
                 )
                 show_error_message_box(
                     pszErrorMessage,
