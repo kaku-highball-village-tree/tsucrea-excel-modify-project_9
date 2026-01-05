@@ -606,6 +606,65 @@ def process_pl_tsv(
     # step0004の処理
     # ここまで
 
+    objRowsStep0005: List[List[str]] = [list(objRow) for objRow in objZeroRows]
+    iAllocationIndex: int = find_column_index(objRowsStep0005[0], "配賦販管費") if objRowsStep0005 else -1
+    iOperatingProfitIndex: int = find_column_index(objRowsStep0005[0], "営業利益") if objRowsStep0005 else -1
+    objInsertedRows: List[List[str]] = []
+    if (
+        objRowsStep0005
+        and iAllocationIndex >= 0
+        and iOperatingProfitIndex >= 0
+        and iOperatingProfitIndex > iAllocationIndex
+    ):
+        objNewColumns: List[str] = [
+            "1Cカンパニー販管費",
+            "2Cカンパニー販管費",
+            "3Cカンパニー販管費",
+            "4Cカンパニー販管費",
+            "事業開発カンパニー販管費",
+        ]
+        for objRow in objRowsStep0005:
+            iInsertPos: int = iAllocationIndex + 1
+            objNewRow: List[str] = objRow[:iInsertPos] + objNewColumns + objRow[iInsertPos:]
+            objInsertedRows.append(objNewRow)
+    else:
+        objInsertedRows = objRowsStep0005
+
+    objRowsStep0005 = objInsertedRows
+    iGrossProfitIndex: int = find_column_index(objRowsStep0005[0], "売上総利益") if objRowsStep0005 else -1
+    iSgaTotalIndex: int = find_column_index(objRowsStep0005[0], "販売費及び一般管理費計") if objRowsStep0005 else -1
+    objTargetRows: List[Tuple[str, int]] = [
+        ("C001_1Cカンパニー販管費", 0),
+        ("C002_2Cカンパニー販管費", 1),
+        ("C003_3Cカンパニー販管費", 2),
+        ("C004_4Cカンパニー販管費", 3),
+        ("C005_事業開発カンパニー販管費", 4),
+    ]
+    for iRowIndex, objRow in enumerate(objRowsStep0005):
+        if not objRow or iRowIndex == 0:
+            continue
+        pszName: str = objRow[0]
+        objTargets = [objItem for objItem in objTargetRows if objItem[0] == pszName]
+        if not objTargets:
+            continue
+        if iGrossProfitIndex < 0 or iSgaTotalIndex < 0 or iSgaTotalIndex <= iGrossProfitIndex:
+            continue
+        fSum: float = 0.0
+        for iCol in range(iGrossProfitIndex + 1, iSgaTotalIndex):
+            if iCol < len(objRow):
+                fSum += parse_number(objRow[iCol])
+        for _, iTarget in objTargets:
+            iInsertPos = iAllocationIndex + 1 + iTarget
+            if len(objRow) <= iInsertPos:
+                objRow.extend([""] * (iInsertPos + 1 - len(objRow)))
+            objRow[iInsertPos] = format_number(fSum)
+        objRowsStep0005[iRowIndex] = objRow
+
+    pszOutputStep0005ActualPath: str = pszOutputStep0003ZeroPath.replace("step0003_", "step0005_", 1)
+    with open(pszOutputStep0005ActualPath, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objRowsStep0005:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
     iGrossProfitColumnIndex: int = -1
     iOperatingProfitColumnIndex: int = -1
     if objRows:
