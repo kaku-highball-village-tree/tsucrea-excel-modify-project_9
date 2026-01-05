@@ -225,36 +225,6 @@ def find_pl_tsv_paths_for_year_months(objYearMonthTexts: List[str]) -> List[str]
     return objFound
 
 
-def build_pl_tsv_base_name(iYear: int, iMonth: int) -> str:
-    pszMonth: str = f"{iMonth:02d}"
-    return f"損益計算書_{iYear}年{pszMonth}月_A∪B_プロジェクト名_C∪D_vertical.tsv"
-
-
-def find_pl_tsv_paths_for_year_months(objYearMonthTexts: List[str]) -> List[str]:
-    if not objYearMonthTexts:
-        return []
-    pszBaseDirectory: str = os.path.dirname(__file__)
-    pszTempDirectory: str = get_temp_output_directory()
-    objFound: List[str] = []
-    objSeen: set[str] = set()
-    objDirectories: List[str] = [pszBaseDirectory, pszTempDirectory]
-    for pszYearMonthText in objYearMonthTexts:
-        objValue = parse_year_month_value(pszYearMonthText)
-        if objValue is None:
-            continue
-        iYear, iMonth = objValue
-        pszBaseName: str = build_pl_tsv_base_name(iYear, iMonth)
-        for pszDirectory in objDirectories:
-            pszCandidate: str = os.path.join(pszDirectory, pszBaseName)
-            if not os.path.isfile(pszCandidate):
-                continue
-            if pszCandidate in objSeen:
-                continue
-            objFound.append(pszCandidate)
-            objSeen.add(pszCandidate)
-    return objFound
-
-
 def parse_year_month_from_name(pszBaseName: str) -> Optional[str]:
     iPrefixIndex: int = pszBaseName.find("_")
     if iPrefixIndex < 0:

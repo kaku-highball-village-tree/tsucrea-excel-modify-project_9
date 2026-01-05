@@ -423,6 +423,7 @@ def process_pl_tsv(
     pszOutputPath: str,
     pszOutputStep0001Path: str,
     pszOutputStep0002Path: str,
+    pszOutputStep0003ZeroPath: str,
     pszOutputStep0003Path: str,
     pszOutputStep0004Path: str,
     pszOutputStep0005Path: str,
@@ -492,6 +493,31 @@ def process_pl_tsv(
 
     with open(pszOutputStep0002Path, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objRows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+
+    objZeroRows: List[List[str]] = [list(objRow) for objRow in objRows]
+    if objZeroRows:
+        objHeaderZero: List[str] = objZeroRows[0]
+        objTargetColumns: List[str] = [
+            "1Cカンパニー販管費の工数",
+            "2Cカンパニー販管費の工数",
+            "3Cカンパニー販管費の工数",
+            "4Cカンパニー販管費の工数",
+            "事業開発カンパニー販管費の工数",
+        ]
+        objTargetIndices: List[int] = [
+            find_column_index(objHeaderZero, pszColumn) for pszColumn in objTargetColumns
+        ]
+        for iRowIndex, objRow in enumerate(objZeroRows):
+            if iRowIndex < 3:
+                continue
+            for iColumnIndex in objTargetIndices:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+            objZeroRows[iRowIndex] = objRow
+
+    with open(pszOutputStep0003ZeroPath, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objZeroRows:
             objOutputFile.write("\t".join(objRow) + "\n")
 
     iGrossProfitColumnIndex: int = -1
@@ -1814,6 +1840,7 @@ def main(argv: list[str]) -> int:
         pszOutputFinalPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_")
         pszOutputStep0001Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0001_")
         pszOutputStep0002Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0002_")
+        pszOutputStep0003ZeroPath: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0003_")
         pszOutputStep0003Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0007_")
         pszOutputStep0004Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0008_")
         pszOutputStep0005Path: str = build_output_path_with_step(pszPlPath, "販管費配賦_step0009_")
@@ -1832,6 +1859,7 @@ def main(argv: list[str]) -> int:
             pszOutputPath,
             pszOutputStep0001Path,
             pszOutputStep0002Path,
+            pszOutputStep0003ZeroPath,
             pszOutputStep0003Path,
             pszOutputStep0004Path,
             pszOutputStep0005Path,
@@ -1842,6 +1870,7 @@ def main(argv: list[str]) -> int:
 
         print(f"Output: {pszOutputStep0001Path}")
         print(f"Output: {pszOutputStep0002Path}")
+        print(f"Output: {pszOutputStep0003ZeroPath}")
         print(f"Output: {pszOutputStep0003Path}")
         print(f"Output: {pszOutputStep0004Path}")
         print(f"Output: {pszOutputStep0005Path}")
