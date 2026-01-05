@@ -165,6 +165,24 @@ def load_manhour_map(pszManhourPath: str) -> Dict[str, List[str]]:
     return objManhourMap
 
 
+def load_company_map(pszManhourPath: str) -> Dict[str, str]:
+    objCompanyMap: Dict[str, str] = {}
+    with open(pszManhourPath, "r", encoding="utf-8", newline="") as objInputFile:
+        for pszLine in objInputFile:
+            pszLineText: str = pszLine.rstrip("\n").rstrip("\r")
+            if pszLineText == "":
+                continue
+            objParts: List[str] = pszLineText.split("\t")
+            if not objParts:
+                continue
+            pszKey: Optional[str] = extract_project_key(objParts[0])
+            if pszKey is None:
+                continue
+            pszCompany: str = objParts[1] if len(objParts) >= 2 else ""
+            objCompanyMap[pszKey] = pszCompany
+    return objCompanyMap
+
+
 def parse_number(pszText: str) -> float:
     pszValue: str = (pszText or "").strip()
     if pszValue == "":
@@ -430,6 +448,7 @@ def process_pl_tsv(
     pszOutputStep0006Path: str,
     pszOutputFinalPath: str,
     objManhourMap: Dict[str, List[str]],
+    objCompanyMap: Dict[str, str],
 ) -> None:
     objRows: List[List[str]] = []
     with open(pszPlPath, "r", encoding="utf-8", newline="") as objInputFile:
@@ -495,6 +514,8 @@ def process_pl_tsv(
         for objRow in objRows:
             objOutputFile.write("\t".join(objRow) + "\n")
 
+    # step0004の処理
+    # ここから
     objZeroRows: List[List[str]] = [list(objRow) for objRow in objRows]
     if objZeroRows:
         objHeaderZero: List[str] = objZeroRows[0]
@@ -519,6 +540,199 @@ def process_pl_tsv(
     with open(pszOutputStep0003ZeroPath, "w", encoding="utf-8", newline="") as objOutputFile:
         for objRow in objZeroRows:
             objOutputFile.write("\t".join(objRow) + "\n")
+
+    pszOutputStep0004Path: str = pszOutputStep0003ZeroPath.replace("step0003_", "step0004_", 1)
+    objAllowedProjects: set[str] = {
+        "科目名",
+        "合計",
+        "本部",
+        "C001_1Cカンパニー販管費",
+        "C002_2Cカンパニー販管費",
+        "C003_3Cカンパニー販管費",
+        "C004_4Cカンパニー販管費",
+        "C005_事業開発カンパニー販管費",
+        "C006_社長室カンパニー販管費",
+        "C007_本部カンパニー販管費",
+        "J001_StartupSide Kyoto",
+        "J002_StartupSide Osaka",
+        "J003_StartupSide Tokyo（東京自主インキュ）",
+        "J004_支援人材教育",
+        "J007_グローバル事業",
+        "J008_商品開発事業",
+        "J009_お通り男史プロジェクト",
+        "J010_SEEDex",
+        "J017_おやじキャンプ飯ビジネスプロデュース事業",
+        "J023_イノベリア",
+        "J028_StartupSide Nagoya",
+        "J029_StartupSide Moriya（守谷自主インキュ）",
+        "J030_投資_ストーリア",
+        "J031_スタートアップバイパス",
+        "J037_クリプトアニメラボLLP",
+        "J039_ミライクルラボ",
+        "J040_EV System",
+        "J041_ヨムリエ",
+        "J042_起業支援ラボ",
+        "J043_Evocare",
+        "J044_人材事業",
+        "J045_ツクリエビジネスプランコンテスト",
+        "J049_ISMS取得",
+        "J050_起業相談AI開発",
+        "J051_StartupSide Magazine",
+        "J052_起業支援者教育事業",
+        "J053_アニハッチ",
+        "J054_StartupSide Tokyo 7F移転プロジェクト",
+        "J055_プロデュース委員会",
+        "J056_情報システム委員会",
+        "J057_周年イベント委員会",
+        "J058_アントレジム",
+        "J059_StartupSide委員会",
+        "J060_社長室",
+        "J061_イベント戦略室",
+        "J062_ツクリエインド",
+        "J063_スタートアップビザ",
+        "J065_スタートアップセミナー",
+        "J066_工数・経費低減対応",
+        "P24014_Japan Connect Initiative",
+        "P24015_ニューギンデジタルコンテンツ開発",
+        "P24019_淳風bizQ（京都）R6",
+        "P24025_2024明治大学ビジネスチャレンジ",
+        "P24033_あいち補助金2024",
+        "P24034_嘉手納町プログラミング力育成事業(中学生)",
+        "P24035_嘉手納町プログラミング力育成事業(小学校)",
+        "P24037_静岡県ピッチイベント業務",
+        "P24038_愛知県起業家創出促進事業",
+        "P24039_チャレンジ長門事業",
+        "P24040_神戸市ものづくり工場の機能拡充に向けた調査検討業務",
+        "P24044_JETRO横浜ディープテックプログラム",
+        "P24045_岐阜薬科大学起業支援プログラム",
+        "P24047_大阪ディープテックインキュベーションプログラム",
+        "P24050_コンテンツ活用ビジネス支援業務",
+        "P25001_Startup Hub Tokyo 丸の内",
+        "P25002_六郷BASE",
+        "P25003_メグリバ(コワーキング)",
+        "P25004_メグリバ(カフェ・ショップ)",
+        "P25005_イデタチ東京・ツムギバ",
+        "P25006_南相馬市産業創造センター",
+        "P25007_TCIC",
+        "P25008_嘉手納町マルチメディアセンター",
+        "P25009_かわさき新産業創造センター",
+        "P25010_東京農工大学西東京国際イノベーション共創拠点 オフィス会員及びパートナー会員のサポート業務",
+        "P25011_ものムーブ2025",
+        "P25012_K-NIC運営業務",
+        "P25013_「うべ産業共創イノベーションセンター 志」運営業務",
+        "P25014_令和7年度川崎起業家オーディション審査員",
+        "P25015_千代田区産業コミュニティ形成支援事業　千代田CULTURE × TECH",
+        "P25016_新宿区経営サポート事業",
+        "P25017_新川崎地区ネットワーク協議会",
+        "P25018_IntoGlobal",
+        "P25019_産業情報かわさき",
+        "P25020_神奈川県_令和7年度次世代起業家創出事業",
+        "P25021_江戸川区アントレプレナー交流事業　EDONOWA",
+        "P25022_東京都ベンチャー技術大賞",
+        "P25023_令和６年度「新事業分野開拓者認定制度(東京都トライアル発注)」",
+        "P25024_羽田イノベーションシティイベント企画運営",
+        "P25025_JICAジョージアSUエコシステム支援",
+        "P25026_JICAセルビアスタートアップ支援",
+        "P25027_チュニジア大学ISTIC",
+        "P25028_令和7年度商業者創業支援プログラム事業",
+        "P25029_京都市コンテンツ制作支援・ＰＲ支援業務",
+        "P25030_プロロジス",
+        "P25031_令和7年度_FTC事業化プログラム",
+        "P25032_品川区スタートアップ・エコシステム推進事業業務委託",
+        "P25033_令和７年度沖縄県立芸術大学キャリア支援事業",
+        "P25034_京都府ZET-valleyオフィス 2025",
+        "P25035_京都芸術センター・アート×ビジネス推進事業 R7",
+        "P25036_あいち補助金2025",
+        "P25037_KYO-CCE Labプロジェクト企画・運営業務",
+        "P25038_早暁プログラム運営支援",
+        "P25039_埼玉県学生向け起業伴走プログラム",
+        "P25040_愛知県起業家創出促進事業　Aichi Startup Battle",
+        "P25041_嘉手納町プログラミング力育成事業(小学校)",
+        "P25042_嘉手納町プログラミング力育成事業(中学生)",
+        "P25043_世界に羽ばたくアニメーター等育成支援事業運営業務委託",
+        "P25044_横浜市SWITCHプログラム",
+        "P25045_チリ・イノベーション運営",
+        "P25046_2025年度大阪府テック_シーズ開拓",
+        "P25047_名古屋市補助金アクセラ",
+        "P25048_ローカル・ゼブラ向けセミナー運営業務",
+        "P25049_令和8年度「新事業分野開拓者認定制度（東京都トライアル発注）」に関する運営業務委託",
+        "P25050_品川ビジネス創造コンテスト",
+        "P25051_2025明治大学ビジネスチャレンジ",
+        "P25052_Tokyoグローバルイノベーションチャレンジ",
+        "P25053_アニハッチ撮影編集業務",
+        "P25054_大阪産業局 スタートアップリスト化作業",
+        "P25055_かわさき起業家オーディション  受賞者インタビュー",
+        "P25056_2025年度NEDO_SSA運営",
+        "P25057_守谷市アントレプレナー教育プログラム2025",
+        "P25058_マンガテック2026",
+        "P25059_創業支援等事業計画機能強化事業にかかる創業支援担当者向け講習会運営事務局業務",
+        "P25060_C1 Tib STUDIO支援事業",
+    }
+    iManhourColumnIndexZero: int = find_column_index(objZeroRows[0], "工数") if objZeroRows else -1
+    objTargetColumnsZero: List[str] = [
+        "1Cカンパニー販管費の工数",
+        "2Cカンパニー販管費の工数",
+        "3Cカンパニー販管費の工数",
+        "4Cカンパニー販管費の工数",
+        "事業開発カンパニー販管費の工数",
+    ]
+    objTargetIndicesZero: List[int] = [
+        find_column_index(objZeroRows[0], pszColumn) if objZeroRows else -1 for pszColumn in objTargetColumnsZero
+    ]
+    bSeenHeadquarter: bool = False
+    for iRowIndex, objRow in enumerate(objZeroRows):
+        if not objRow:
+            continue
+        pszName: str = objRow[0]
+        if pszName == "本部":
+            bSeenHeadquarter = True
+            continue
+        if not bSeenHeadquarter:
+            continue
+        if pszName not in objAllowedProjects:
+            continue
+        if pszName.startswith("C"):
+            for iColumnIndex in objTargetIndicesZero:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+            objZeroRows[iRowIndex] = objRow
+            continue
+        pszKey: Optional[str] = extract_project_key(pszName)
+        if pszKey is None:
+            continue
+        pszCompany: str = objCompanyMap.get(pszKey, "")
+        iTargetColumn: int = -1
+        if pszCompany == "第一インキュ":
+            iTargetColumn = objTargetIndicesZero[0] if len(objTargetIndicesZero) > 0 else -1
+        elif pszCompany == "第二インキュ":
+            iTargetColumn = objTargetIndicesZero[1] if len(objTargetIndicesZero) > 1 else -1
+        elif pszCompany == "第三インキュ":
+            iTargetColumn = objTargetIndicesZero[2] if len(objTargetIndicesZero) > 2 else -1
+        elif pszCompany == "第四インキュ":
+            iTargetColumn = objTargetIndicesZero[3] if len(objTargetIndicesZero) > 3 else -1
+        elif pszCompany == "事業開発":
+            iTargetColumn = objTargetIndicesZero[4] if len(objTargetIndicesZero) > 4 else -1
+        if iTargetColumn >= 0:
+            if len(objRow) <= iTargetColumn:
+                objRow.extend([""] * (iTargetColumn + 1 - len(objRow)))
+            pszManhourValue: str = "0:00:00"
+            if iManhourColumnIndexZero >= 0 and iManhourColumnIndexZero < len(objRow):
+                pszManhourValue = objRow[iManhourColumnIndexZero] or "0:00:00"
+            for iColumnIndex in objTargetIndicesZero:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+            objRow[iTargetColumn] = pszManhourValue
+        else:
+            for iColumnIndex in objTargetIndicesZero:
+                if 0 <= iColumnIndex < len(objRow):
+                    objRow[iColumnIndex] = "0:00:00"
+        objZeroRows[iRowIndex] = objRow
+
+    with open(pszOutputStep0004Path, "w", encoding="utf-8", newline="") as objOutputFile:
+        for objRow in objZeroRows:
+            objOutputFile.write("\t".join(objRow) + "\n")
+    # step0004の処理
+    # ここまで
 
     iGrossProfitColumnIndex: int = -1
     iOperatingProfitColumnIndex: int = -1
@@ -1854,6 +2068,7 @@ def main(argv: list[str]) -> int:
             return 1
 
         objManhourMap: Dict[str, str] = load_manhour_map(pszManhourPath)
+        objCompanyMap: Dict[str, str] = load_company_map(pszManhourPath)
         process_pl_tsv(
             pszPlPath,
             pszOutputPath,
@@ -1866,6 +2081,7 @@ def main(argv: list[str]) -> int:
             pszOutputStep0006Path,
             pszOutputFinalPath,
             objManhourMap,
+            objCompanyMap,
         )
 
         print(f"Output: {pszOutputStep0001Path}")
