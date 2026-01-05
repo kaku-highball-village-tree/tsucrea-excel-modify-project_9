@@ -142,30 +142,25 @@ def extract_project_key(pszProjectName: str) -> Optional[str]:
     return None
 
 
-def load_manhour_map(pszManhourPath: str) -> Dict[str, str]:
-    objManhourMap: Dict[str, str] = {}
+def load_manhour_map(pszManhourPath: str) -> Dict[str, List[str]]:
+    objManhourMap: Dict[str, List[str]] = {}
     with open(pszManhourPath, "r", encoding="utf-8", newline="") as objInputFile:
         for pszLine in objInputFile:
             pszLineText: str = pszLine.rstrip("\n").rstrip("\r")
             if pszLineText == "":
                 continue
 
-            pszFirstColumn: str
-            if "\t" in pszLineText:
-                pszFirstColumn = pszLineText.split("\t", 1)[0]
-            else:
-                pszFirstColumn = pszLineText
+            objParts: List[str] = pszLineText.split("\t")
+            pszFirstColumn: str = objParts[0] if objParts else ""
 
             pszKey: Optional[str] = extract_project_key(pszFirstColumn)
             if pszKey is None:
                 continue
 
-            pszTimeValue: str = ""
-            if "\t" in pszLineText:
-                objParts: List[str] = pszLineText.split("\t")
-                if len(objParts) >= 2:
-                    pszTimeValue = objParts[1]
-            objManhourMap[pszKey] = pszTimeValue
+            objManhourValues: List[str] = objParts[-6:] if len(objParts) >= 7 else []
+            if len(objManhourValues) < 6:
+                objManhourValues.extend([""] * (6 - len(objManhourValues)))
+            objManhourMap[pszKey] = objManhourValues
 
     return objManhourMap
 
@@ -433,7 +428,7 @@ def process_pl_tsv(
     pszOutputStep0005Path: str,
     pszOutputStep0006Path: str,
     pszOutputFinalPath: str,
-    objManhourMap: Dict[str, str],
+    objManhourMap: Dict[str, List[str]],
 ) -> None:
     objRows: List[List[str]] = []
     with open(pszPlPath, "r", encoding="utf-8", newline="") as objInputFile:
@@ -446,7 +441,16 @@ def process_pl_tsv(
         if iRowIndex == 0:
             if len(objRow) == 0:
                 objRow = [""]
-            objRow.append("工数")
+            objRow.extend(
+                [
+                    "工数",
+                    "1Cカンパニー販管費の工数",
+                    "2Cカンパニー販管費の工数",
+                    "3Cカンパニー販管費の工数",
+                    "4Cカンパニー販管費の工数",
+                    "事業開発カンパニー販管費の工数",
+                ]
+            )
             objRows[iRowIndex] = objRow
             continue
 
@@ -454,11 +458,11 @@ def process_pl_tsv(
         if pszKey is None:
             continue
 
-        pszManhour: str = objManhourMap.get(pszKey, "")
-        if pszManhour == "":
-            pszManhour = "0:00:00"
+        objManhours: List[str] = objManhourMap.get(pszKey, [])
+        if len(objManhours) < 6:
+            objManhours = objManhours + ["0:00:00"] * (6 - len(objManhours))
 
-        objRow.append(pszManhour)
+        objRow.extend(objManhours[:6])
         objRows[iRowIndex] = objRow
 
     with open(pszOutputStep0001Path, "w", encoding="utf-8", newline="") as objOutputFile:
