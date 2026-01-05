@@ -338,6 +338,16 @@ def append_debug_log(pszMessage: str, pszDebugFilePath: str = "debug.txt") -> No
 
 
 def insert_allocated_sga_row(objRows: List[List[str]]) -> None:
+    # 追加仕様:
+    # 「販売費及び一般管理費計」行を検出して「配賦販管費」行を挿入した直後、
+    # 次の5行を「配賦カンパニー販管費」のプレースホルダーとして追加すること:
+    # ・配賦1Cカンパニー販管費
+    # ・配賦2Cカンパニー販管費
+    # ・配賦3Cカンパニー販管費
+    # ・配賦4Cカンパニー販管費
+    # ・配賦事業開発カンパニー販管費
+    # 追加する各行は、「配賦販管費」行と同様に数値列をすべて文字列 "0" で初期化し、
+    # 後続の工数按分入力用プレースホルダーとして確保する。
     if not objRows:
         return
     for iRowIndex, objRow in enumerate(objRows):
@@ -345,6 +355,18 @@ def insert_allocated_sga_row(objRows: List[List[str]]) -> None:
             continue
         iColumnCount: int = len(objRow)
         objRows.insert(iRowIndex + 1, ["配賦販管費"] + ["0"] * max(iColumnCount - 1, 0))
+        objAllocatedCompanyExpenses: list[str] = [
+            "配賦1Cカンパニー販管費",
+            "配賦2Cカンパニー販管費",
+            "配賦3Cカンパニー販管費",
+            "配賦4Cカンパニー販管費",
+            "配賦事業開発カンパニー販管費",
+        ]
+        objPlaceholderRows: List[List[str]] = [
+            [pszCompanyExpense] + ["0"] * max(iColumnCount - 1, 0)
+            for pszCompanyExpense in objAllocatedCompanyExpenses
+        ]
+        objRows[iRowIndex + 2 : iRowIndex + 2] = objPlaceholderRows
         return
 
 
