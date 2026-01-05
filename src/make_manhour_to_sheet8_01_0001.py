@@ -4310,6 +4310,16 @@ def load_org_table_billing_map_for_step11() -> Dict[str, str]:
                             objOrgTableBillingMapPrefix.setdefault(pszProjectCodePrefix, pszBillingCompany)
     return {**objOrgTableBillingMapPrefix, **objOrgTableBillingMapExact}
 
+
+def is_step10_tsv_file(pszPath: str) -> bool:
+    return re.match(r".*工数_\d{4}年\d{2}月_step10_各プロジェクトの工数\.tsv$", pszPath) is not None
+
+
+def is_manhour_csv_file_path(pszPath: str) -> bool:
+    pszBaseName: str = os.path.basename(pszPath)
+    return re.match(r"^工数\d{2}\.\d{1,2}\.csv$", pszBaseName) is not None
+
+
 def main() -> int:
     objParser: argparse.ArgumentParser = argparse.ArgumentParser()
     objParser.add_argument(
@@ -4321,26 +4331,40 @@ def main() -> int:
 
     convert_org_table_tsv(Path(__file__).resolve().parent)
 
+    objStep10TsvFiles: List[str] = []
+    objManhourCsvFiles: List[str] = []
+    objUnsupportedFiles: List[str] = []
+    for pszInputPath in objArgs.pszInputManhourCsvPaths:
+        if is_step10_tsv_file(pszInputPath):
+            objStep10TsvFiles.append(pszInputPath)
+        elif is_manhour_csv_file_path(pszInputPath):
+            objManhourCsvFiles.append(pszInputPath)
+        else:
+            objUnsupportedFiles.append(pszInputPath)
+
+    if objUnsupportedFiles:
+        print("Error: unsupported input files detected:")
+        for pszUnsupported in objUnsupportedFiles:
+            print(f"  {pszUnsupported}")
+        return 1
+
     iExitCode: int = 0
-    for pszInputManhourCsvPath in objArgs.pszInputManhourCsvPaths:
-        if re.match(
-            r".*工数_\d{4}年\d{2}月_step10_各プロジェクトの工数\.tsv$",
-            pszInputManhourCsvPath,
-        ):
-            try:
-                iResultStep10Only: int = write_step11_from_step10_only(pszInputManhourCsvPath)
-            except Exception as objException:
-                print(
-                    "Error: failed to process step10 TSV input: {0}. Detail = {1}".format(
-                        pszInputManhourCsvPath,
-                        objException,
-                    )
+    for pszStep10TsvPath in objStep10TsvFiles:
+        try:
+            iResultStep10Only: int = write_step11_from_step10_only(pszStep10TsvPath)
+        except Exception as objException:
+            print(
+                "Error: failed to process step10 TSV input: {0}. Detail = {1}".format(
+                    pszStep10TsvPath,
+                    objException,
                 )
-                iExitCode = 1
-                continue
-            if iResultStep10Only != 0:
-                iExitCode = 1
+            )
+            iExitCode = 1
             continue
+        if iResultStep10Only != 0:
+            iExitCode = 1
+
+    for pszInputManhourCsvPath in objManhourCsvFiles:
         try:
             iResult: int = process_single_input(pszInputManhourCsvPath)
         except Exception as objException:
